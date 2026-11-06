@@ -63,12 +63,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for pattern in 'release-assets/*.exe' 'release-assets/*.dmg' 'release-assets/*.zip'; do
-            if ! compgen -G "$pattern" > /dev/null; then
-              echo "Missing expected release file: $pattern" >&2
+          version=$(node -p "require('./package.json').version")
+          for filename in "GlassMail-${version}.dmg" "GlassMail-${version}-mac.zip" "GlassMail-${version}-arm64.dmg" "GlassMail-${version}-arm64-mac.zip"; do
+            if [[ ! -f "release-assets/$filename" ]]; then
+              echo "Missing expected release file: $filename" >&2
               exit 1
             fi
           done
+          if ! compgen -G 'release-assets/*.exe' > /dev/null; then
+            echo "Missing Windows installer" >&2
+            exit 1
+          fi
           if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" release-assets/* --clobber
           else

@@ -54,7 +54,7 @@ npm run package:mac      # macOS arm64 / x64 的 DMG 与 ZIP
 npm run package:win      # Windows x64 的 NSIS 安装程序
 ```
 
-建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.4` 对应标签 `v1.0.4`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
+建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.5` 对应标签 `v1.0.5`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
 
 图标由仓库内 SVG 生成；需要修改时运行 `npm run icons`。现有 PNG 已包含在源码中，无需每次重建。
 
