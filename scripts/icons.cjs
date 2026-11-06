@@ -1,0 +1,13 @@
+const fs=require('node:fs');
+const {Resvg}=require('@resvg/resvg-js');
+fs.mkdirSync('build',{recursive:true});
+const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024"><defs><linearGradient id="a" x2=".7" y2="1"><stop stop-color="#accfe9"/><stop offset="1" stop-color="#4384bd"/></linearGradient><linearGradient id="b" x2=".2" y2="1"><stop stop-color="white" stop-opacity=".45"/><stop offset="1" stop-color="white" stop-opacity=".05"/></linearGradient></defs><rect x="82" y="82" width="860" height="860" rx="210" fill="url(#a)"/><rect x="102" y="102" width="820" height="820" rx="195" fill="url(#b)" stroke="#e1f4ff" stroke-opacity=".6" stroke-width="3"/><rect x="251" y="329" width="522" height="374" rx="61" fill="white" fill-opacity=".12" stroke="#f4fbff" stroke-width="29"/><path d="m269 354 222 169q21 16 42 0l222-169" fill="none" stroke="#f4fbff" stroke-width="29" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+fs.writeFileSync('build/icon.svg',svg);fs.writeFileSync('build/icon.png',new Resvg(svg).render().asPng());
+const png256=new Resvg(svg,{fitTo:{mode:'width',value:256}}).render().asPng();
+const ico=Buffer.alloc(22);ico.writeUInt16LE(1,2);ico.writeUInt16LE(1,4);ico.writeUInt16LE(1,10);ico.writeUInt16LE(32,12);ico.writeUInt32LE(png256.length,14);ico.writeUInt32LE(22,18);fs.writeFileSync('build/icon.ico',Buffer.concat([ico,png256]));
+const chunks=[['ic07',128],['ic08',256],['ic09',512],['ic10',1024]].map(([type,size])=>{const png=new Resvg(svg,{fitTo:{mode:'width',value:size}}).render().asPng(),header=Buffer.alloc(8);header.write(type);header.writeUInt32BE(png.length+8,4);return Buffer.concat([header,png]);});
+const icns=Buffer.alloc(8);icns.write('icns');icns.writeUInt32BE(8+chunks.reduce((n,c)=>n+c.length,0),4);fs.writeFileSync('build/icon.icns',Buffer.concat([icns,...chunks]));
+const tray=`<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="3" fill="none" stroke="black" stroke-width="1.7"/><path d="m4 7 6.7 5.2a2 2 0 0 0 2.6 0L20 7" fill="none" stroke="black" stroke-width="1.7"/></svg>`;
+fs.writeFileSync('build/trayTemplate.png',new Resvg(tray).render().asPng());
+fs.writeFileSync('build/trayTemplate@2x.png',new Resvg(tray,{fitTo:{mode:'width',value:40}}).render().asPng());
+fs.writeFileSync('build/tray.png',new Resvg(svg,{fitTo:{mode:'width',value:32}}).render().asPng());
