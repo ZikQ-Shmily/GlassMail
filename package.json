@@ -1,7 +1,7 @@
 {
   "name": "glassmail",
   "productName": "GlassMail",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "description": "Liquid Glass email monitoring for Windows and macOS",
   "author": "GlassMail",
@@ -61,8 +61,9 @@
           ]
         }
       ],
-      "identity": null,
-      "icon": "build/icon.icns"
+      "identity": "-",
+      "icon": "build/icon.icns",
+      "strictVerify": true
     },
     "win": {
       "target": [
