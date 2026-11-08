@@ -54,7 +54,7 @@ npm run package:mac      # macOS arm64 / x64 的 DMG 与 ZIP
 npm run package:win      # Windows x64 的 NSIS 安装程序
 ```
 
-建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.5` 对应标签 `v1.0.5`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
+建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.6` 对应标签 `v1.0.6`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
 
 图标由仓库内 SVG 生成；需要修改时运行 `npm run icons`。现有 PNG 已包含在源码中，无需每次重建。
 
@@ -64,7 +64,7 @@ npm run package:win      # Windows x64 的 NSIS 安装程序
 - 实际提醒延迟取决于检查间隔、网络及邮件量；应用退出、设备睡眠/关机时不监测。不自动启动电脑或唤醒设备。
 - 邮件超过 5 MB 时只获取发件人和主题，不下载正文，正文条件不会匹配这类邮件。附件不下载到磁盘，也不展示 HTML 邮件；小于限制的邮件通过 MIME 解析提取文本。
 - 系统静音、音量和通知权限会影响声音/桌面通知。真实邮箱需由你填写授权码后验证，开发验证使用模拟 IMAP 客户端。
-- 开发构建未做正式 Windows 代码签名和 Apple 公证；正式分发前需配置发行证书。macOS 本地开发包使用默认的临时签名机制，不使用个人开发证书。
+- Windows 构建未做正式代码签名。macOS 构建使用临时签名以验证应用完整性，但未使用 Apple Developer ID 签名或 Apple 公证；下载后 macOS 仍会提示无法验证开发者。仅在确认下载来源可信时，按 [Apple 的说明](https://support.apple.com/zh-cn/102445) 在「系统设置 → 隐私与安全性」中选择「仍要打开」（如系统提供）。正式分发需配置 Developer ID 签名并完成 Apple 公证。
 - Windows 包可交叉生成，但本机为 macOS，未在真实 Windows 系统上运行验收。
 
 ## 数据与安全
