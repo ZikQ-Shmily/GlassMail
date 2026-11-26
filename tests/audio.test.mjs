@@ -24,6 +24,8 @@ function environment(t) {
     constructor(src) {this.src=src;this.currentTime=12;this.pauseCount=0;this.playing=false;audios.push(this);}
     play() {return (playGate?.promise || Promise.resolve()).then(() => {this.playing=true;});}
     pause() {this.pauseCount++;this.playing=false;}
+    removeAttribute(name) {if(name==='src')this.src='';}
+    load() {this.reset=true;}
     end() {this.onended?.();}
     fail() {this.onerror?.();}
   }
@@ -101,6 +103,7 @@ test('自定义音频使用原生循环，停止会暂停、复位且取消监�
   stopSound();
   assert.equal(audio.playing,false);assert.equal(audio.currentTime,0);
   assert.equal(audio.onended,null);assert.equal(audio.onerror,null);
+  assert.equal(audio.src,'');assert.equal(audio.reset,true);
   assert.deepEqual(env.state(),{playing:false,name:null,loop:false});
 });
 
