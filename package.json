@@ -1,7 +1,7 @@
 {
   "name": "glassmail",
   "productName": "GlassMail",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "private": true,
   "description": "Liquid Glass email monitoring for Windows and macOS",
   "author": "GlassMail",

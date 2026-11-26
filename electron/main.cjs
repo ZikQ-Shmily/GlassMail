@@ -1,16 +1,20 @@
-const {app, BrowserWindow, ipcMain, safeStorage, dialog, Notification, Tray, Menu, nativeImage} = require('electron');
+const {app, BrowserWindow, ipcMain, safeStorage, dialog, Notification, Tray, Menu, nativeImage, protocol} = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const {randomUUID} = require('node:crypto');
 const {Monitor} = require('./monitor.cjs');
+const audio = require('./custom-audio.cjs');
+protocol.registerSchemesAsPrivileged([
+  {scheme: audio.scheme, privileges: {standard: true, secure: true, stream: true}}
+]);
 let win, tray, state, file, monitor, domain, quitting = false, timer;
-let customSound = null;
+let customSound = null, choosingSound = false;
 const isSmoke = process.argv.includes('--smoke-test');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.setAppUserModelId('com.glassmail.desktop');
 if (!isSmoke && !app.requestSingleInstanceLock()) app.quit();
-function persist() { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file + '.tmp', JSON.stringify(state), {mode: 0o600}); fs.renameSync(file + '.tmp', file); }
-function publicState() { return {accounts: state.accounts.map(({secret, ...a}) => ({...a, hasPassword: !!secret, status: monitor?.status[a.id] || {state: a.enabled ? 'waiting' : 'disabled', message: a.enabled ? '等待同步' : '已停用'}})), rules: state.rules, messages: state.messages, alerts: state.alerts, settings: state.settings, customSound: customSound ? {name: state.customSoundName, data: customSound} : null}; }
+function persist(next = state) { fs.mkdirSync(path.dirname(file), {recursive: true}); fs.writeFileSync(file + '.tmp', JSON.stringify(next), {mode: 0o600}); fs.renameSync(file + '.tmp', file); }
+function publicState() { return {accounts: state.accounts.map(({secret, ...a}) => ({...a, hasPassword: !!secret, status: monitor?.status[a.id] || {state: a.enabled ? 'waiting' : 'disabled', message: a.enabled ? '等待同步' : '已停用'}})), rules: state.rules, messages: state.messages, alerts: state.alerts, settings: state.settings, customSound: customSound ? {name: customSound.name, url: customSound.url} : null}; }
 function publish() { if (win && !win.isDestroyed()) win.webContents.send('glassmail:state', publicState()); }
 function encrypt(value) { if (!safeStorage.isEncryptionAvailable()) throw Error('系统加密存储不可用，无法安全保存授权码'); return safeStorage.encryptString(value).toString('base64'); }
 function password(account) { if (!account.secret) return ''; try { return safeStorage.decryptString(Buffer.from(account.secret, 'base64')); } catch { return ''; } }
@@ -22,7 +26,7 @@ function onMail(mail, historical) {
   if (rules.length && !state.settings.paused) {
     const alert = {id: randomUUID(), messageId: mail.id, subject: mail.subject, sender: mail.senderEmail, accountId: mail.accountId, rules: rules.map(r => r.name), date: new Date().toISOString(), acknowledged: false, sound: rules[0].sound};
     state.alerts.unshift(alert); state.alerts = state.alerts.slice(0, 300);
-    win?.webContents.send('glassmail:alert', {...alert, volume: state.settings.volume, loop: state.settings.loopSound, customSound});
+    win?.webContents.send('glassmail:alert', {...alert, volume: state.settings.volume, loop: state.settings.loopSound, customSound: alert.sound === 'custom' ? customSound?.url : undefined});
     if (state.settings.notifications && Notification.isSupported()) {
       const notification = new Notification({title: `GlassMail · ${rules[0].name}`, body: `${mail.sender}\n${mail.subject}`, silent: true});
       notification.on('click', () => {win.show(); win.focus();}); notification.show();
@@ -35,6 +39,13 @@ function register(name, handler) { ipcMain.handle(`glassmail:${name}`, async (ev
   if (event.sender !== win.webContents || event.senderFrame !== win.webContents.mainFrame) throw Error('无效的窗口请求');
   try { return await handler(...args); } catch (error) { throw Error(error.message || '操作失败'); }
 }); }
+function useCustomSound(sound) {
+  const next = {...state, customSoundName: sound.name, customSoundFile: sound.file};
+  persist(next);
+  state = next;
+  customSound = sound;
+}
+
 function setupIPC() {
   register('state', () => publicState());
   register('saveAccount', input => {
@@ -77,13 +88,28 @@ function setupIPC() {
     state = {...state, ...config, cursors: {}, messages: [], alerts: []}; persist(); restartTimer(); publish(); monitor.sync(); return true;
   });
   register('chooseSound', async () => {
-    const chosen = await dialog.showOpenDialog(win, {properties: ['openFile'], filters: [{name: '音频（最大 5 MB）', extensions: ['mp3','wav','ogg']}]});
-    if (chosen.canceled) return false;
-    const p = chosen.filePaths[0], ext = path.extname(p).toLowerCase(), types = {'.mp3':'audio/mpeg','.wav':'audio/wav','.ogg':'audio/ogg'};
-    if (!types[ext] || fs.statSync(p).size > 5 * 1024 * 1024) throw Error('请选择 5 MB 以内的 MP3、WAV 或 OGG');
-    customSound = `data:${types[ext]};base64,${fs.readFileSync(p).toString('base64')}`;
-    fs.writeFileSync(path.join(app.getPath('userData'), 'custom-sound.txt'), customSound, {mode: 0o600});
-    state.customSoundName = path.basename(p); persist(); publish(); return true;
+    if (choosingSound) return false;
+    choosingSound = true;
+    try {
+      const chosen = await dialog.showOpenDialog(win, {
+        properties: ['openFile'],
+        filters: [{name: '音频（最大 100 MB）', extensions: audio.extensions}]
+      });
+      if (chosen.canceled) return false;
+      const sound = await audio.importSound(app.getPath('userData'), chosen.filePaths[0]);
+      const previous = customSound;
+      try {
+        useCustomSound(sound);
+      } catch (error) {
+        await audio.removeSound(sound);
+        throw error;
+      }
+      await audio.removeSound(previous);
+      publish();
+      return true;
+    } finally {
+      choosingSound = false;
+    }
   });
   register('clearHistory', () => {state.messages = []; state.alerts = []; persist(); publish();});
   register('windowAction', action => { if (action === 'minimize') win.minimize(); else if (action === 'maximize') win.isMaximized() ? win.unmaximize() : win.maximize(); else if (action === 'close') win.close(); });
@@ -97,7 +123,19 @@ app.whenReady().then(async () => {
     try { const stored = JSON.parse(fs.readFileSync(file, 'utf8')); const config = domain.importConfig({...stored, format:'glassmail', version:1}); state = {...state, ...stored, ...config, accounts: config.accounts.map(a => ({...a, secret: stored.accounts.find(s => s.id === a.id)?.secret || ''}))}; }
     catch { dialog.showErrorBox('配置读取失败', '原配置文件已保留。请备份后检查 glassmail.json，应用不会覆盖此文件。'); app.quit(); return; }
   }
-  try {customSound = fs.readFileSync(path.join(app.getPath('userData'), 'custom-sound.txt'), 'utf8');} catch {}
+  const userData = app.getPath('userData');
+  customSound = await audio.loadSound(userData, state.customSoundFile, state.customSoundName);
+  if (!state.customSoundFile) {
+    let migrated;
+    try {
+      migrated = await audio.migrateLegacySound(userData, state.customSoundName);
+      if (migrated) useCustomSound(migrated);
+    } catch (error) {
+      await audio.removeSound(migrated);
+      console.warn('无法迁移旧版自定义音效：', error.code || error.name);
+    }
+  }
+  protocol.handle(audio.scheme, request => audio.serveSound(request, customSound));
   win = new BrowserWindow({width: 1440, height: 940, minWidth: 1000, minHeight: 720, title: 'GlassMail', backgroundColor: '#e9f0f3', titleBarStyle: 'hidden', trafficLightPosition: {x: 22,y: 22}, show: false, webPreferences: {preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false, backgroundThrottling: false}});
   win.webContents.setWindowOpenHandler(() => ({action: 'deny'}));
   win.webContents.on('will-navigate', e => e.preventDefault());

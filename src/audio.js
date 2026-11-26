@@ -12,6 +12,8 @@ function release(session) {
     session.audio.onended = session.audio.onerror = null;
     session.audio.pause();
     try {session.audio.currentTime = 0;} catch {}
+    session.audio.removeAttribute('src');
+    session.audio.load();
   }
   for (const {oscillator,gain} of session.nodes) {
     oscillator.onended = null;
@@ -69,10 +71,11 @@ export async function playSound(name = 'glass', volume = 65, custom = null, {loo
     if (customAudio) {
       const audio = session.audio = new Audio(custom);
       audio.volume = level; audio.loop = session.loop;
-      audio.onended = audio.onerror = () => finish(session);
+      audio.onended = () => finish(session);
       await audio.play();
       // A stopped/replaced play request may settle later; it must never restart audio.
       if (current !== session) {audio.pause(); try {audio.currentTime = 0;} catch {}}
+      else audio.onerror = () => finish(session);
       return;
     }
     const context = session.context = new AudioContext();
