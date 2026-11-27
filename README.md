@@ -15,6 +15,8 @@ Windows + macOS 邮件监测桌面应用，采用统一的 Liquid Glass 风格�
 
 ## 使用
 
+桌面应用启动后会检查 GitHub 上的新版本，也可以在「偏好设置 → 软件更新」手动检查。发现新版本时，顶部栏会显示「有更新」。点击「下载更新」会在系统浏览器下载适合当前设备的安装包，下载后打开安装包完成更新。
+
 1. 打开安装后的 GlassMail，在「邮箱管理」添加邮箱。
 2. 在邮箱服务商中启用 IMAP，填写服务商提供的 IMAP 主机与授权码/应用专用密码。默认端口 993。
 3. 点击「测试连接」，成功后「保存并连接」。
@@ -54,7 +56,7 @@ npm run package:mac      # macOS arm64 / x64 的 DMG 与 ZIP
 npm run package:win      # Windows x64 的 NSIS 安装程序
 ```
 
-建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.6` 对应标签 `v1.0.6`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
+建议在对应操作系统打包，尤其是正式签名发布。`.github/workflows/build.yml` 在推送 `main` 分支、推送 `v*` 标签时自动构建，也可在 GitHub Actions 页面手动运行。工作流先运行测试，再分别生成 Windows 安装程序和 macOS 安装包，并保存在对应运行记录的 Artifacts 中。推送与 `package.json` 版本一致的标签（例如版本 `1.0.8` 对应标签 `v1.0.8`）后，两个平台均构建成功时会自动将安装包发布到 GitHub Releases；仅推送 `main` 或手动运行不会创建 Release。
 
 图标由仓库内 SVG 生成；需要修改时运行 `npm run icons`。现有 PNG 已包含在源码中，无需每次重建。
 

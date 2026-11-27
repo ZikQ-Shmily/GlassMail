@@ -51,3 +51,10 @@ test('循环播放设置兼容旧配置，严格校验并随配置迁移保留',
  for (const value of [undefined,false,'false','true',1,null]) assert.equal(settingsInput({...defaults,loopSound:value}).loopSound,false);
  assert.equal(settingsInput({...defaults,loopSound:true}).loopSound,true);
 });
+
+test('已有超限本地配置仍可在升级后读取，导入外部配置继续校验上限', () => {
+  const accounts = Array.from({length:51}, (_, i) => ({...account,id:`a${i}`}));
+  const data = exportConfig({accounts,rules:[],settings:defaults});
+  assert.throws(() => importConfig(data), /最多可包含/);
+  assert.equal(importConfig(data, {enforceLimits:false}).accounts.length, 51);
+});

@@ -4,7 +4,7 @@ import {readFile} from 'node:fs/promises';
 
 // Load browser ESM without changing the Electron package's CommonJS configuration.
 const source = await readFile(new URL('../src/audio.js',import.meta.url),'utf8');
-const {playSound,stopSound,onSoundState} = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const {playSound,stopSound,togglePreview,stopPreview,onSoundState} = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
 const deferred = () => {let resolve,reject; const promise = new Promise((yes,no) => {resolve=yes;reject=no;}); return {promise,resolve,reject};};
 
 function environment(t) {
@@ -40,13 +40,13 @@ function environment(t) {
 
 test('内置音默认单次播放，结束后释放声音并通知空闲状态',async t=>{
   const env=environment(t);
-  assert.deepEqual(env.state(),{playing:false,name:null,loop:false});
+  assert.deepEqual(env.state(),{playing:false,name:null,loop:false,previewKey:null});
   await playSound('glass',65);
-  assert.deepEqual(env.state(),{playing:true,name:'glass',loop:false});
+  assert.deepEqual(env.state(),{playing:true,name:'glass',loop:false,previewKey:null});
   const context=env.contexts[0];
   assert.equal(context.oscillators.length,3);
   for (const oscillator of context.oscillators) oscillator.end();
-  assert.deepEqual(env.state(),{playing:false,name:null,loop:false});
+  assert.deepEqual(env.state(),{playing:false,name:null,loop:false,previewKey:null});
   assert.equal(context.closed,1);
   t.mock.timers.tick(10000);
   assert.equal(context.oscillators.length,3);
@@ -78,7 +78,7 @@ test('新的提醒取代旧循环；正在播放的旧节点立即停止且过�
   staleEnd();t.mock.timers.tick(5000);
   assert.equal(old.oscillators.length,5);
   assert.equal(env.contexts[1].oscillators.length,4);
-  assert.deepEqual(env.state(),{playing:true,name:'chime',loop:true});
+  assert.deepEqual(env.state(),{playing:true,name:'chime',loop:true,previewKey:null});
 });
 
 test('AudioContext.resume 等待期间停止或被替代，完成后不会恢复旧声音',async t=>{
@@ -104,7 +104,7 @@ test('自定义音频使用原生循环，停止会暂停、复位且取消监�
   assert.equal(audio.playing,false);assert.equal(audio.currentTime,0);
   assert.equal(audio.onended,null);assert.equal(audio.onerror,null);
   assert.equal(audio.src,'');assert.equal(audio.reset,true);
-  assert.deepEqual(env.state(),{playing:false,name:null,loop:false});
+  assert.deepEqual(env.state(),{playing:false,name:null,loop:false,previewKey:null});
 });
 
 test('停止尚未完成的自定义 play，延迟完成不会复活声音或覆盖新提醒状态',async t=>{
@@ -147,4 +147,31 @@ test('外部关闭音频上下文会取消循环；取消订阅后不再发状�
   t.mock.timers.tick(1000);
   assert.equal(context.oscillators.length,4);
   assert.equal(env.state().playing,false);assert.equal(states.length,1);
+});
+
+
+test('同一试听按钮再次点击，会取消正在启动的长音频',async t=>{
+  const env=environment(t), gate=deferred();
+  env.playGate(gate);
+  const options={previewKey:'editor',loop:true};
+  const start=togglePreview('custom',65,'fixture.flac',options);
+  assert.equal(env.state().previewKey,'editor');
+  await togglePreview('custom',65,'fixture.flac',options);
+  assert.equal(env.state().playing,false);
+
+  gate.resolve();
+  await start;
+  assert.equal(env.audios.length,1);
+  assert.equal(env.audios[0].playing,false);
+  assert.equal(env.audios[0].src,'');
+});
+
+test('关闭规则试听不会停止后来触发的同一个报警音效',async t=>{
+  const env=environment(t);
+  await togglePreview('custom',65,'fixture.flac',{previewKey:'editor',loop:true});
+  await playSound('custom',65,'fixture.flac',{loop:true});
+  stopPreview('editor');
+  assert.equal(env.audios[0].playing,false);
+  assert.equal(env.audios[1].playing,true);
+  assert.equal(env.state().previewKey,null);
 });

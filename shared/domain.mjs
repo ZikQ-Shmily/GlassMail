@@ -1,4 +1,5 @@
 export const defaults = { volume: 65, loopSound: false, notifications: true, paused: false, pollSeconds: 45, theme: 'light', closeToTray: true };
+export const limits = {accounts: 50, rules: 200};
 const str = (x, max = 300) => String(x ?? '').trim().slice(0, max);
 const id = x => str(x, 100);
 export function accountInput(a) {
@@ -28,8 +29,11 @@ export function matchesRule(mail, rule) {
 }
 export function settingsInput(s) { return { volume: Math.max(0, Math.min(100, Number(s.volume) || 0)), loopSound: s.loopSound === true, notifications: s.notifications !== false, paused: !!s.paused, pollSeconds: Math.max(30, Math.min(600, Number(s.pollSeconds) || 45)), theme: s.theme === 'dark' ? 'dark' : 'light', closeToTray: s.closeToTray !== false }; }
 export function exportConfig(state) { return { format: 'glassmail', version: 1, exportedAt: new Date().toISOString(), accounts: state.accounts.map(({secret, ...a}) => a), rules: state.rules.map(r => ({...r, sound: r.sound === 'custom' ? 'glass' : r.sound})), settings: state.settings }; }
-export function importConfig(data) {
-  if (data?.format !== 'glassmail' || data.version !== 1 || !Array.isArray(data.accounts) || !Array.isArray(data.rules) || data.accounts.length > 50 || data.rules.length > 200) throw Error('不是有效的 GlassMail 配置文件');
+export function importConfig(data, {enforceLimits = true} = {}) {
+  if (data?.format !== 'glassmail' || data.version !== 1 || !Array.isArray(data.accounts) || !Array.isArray(data.rules)) throw Error('不是有效的 GlassMail 配置文件');
+  if (enforceLimits && (data.accounts.length > limits.accounts || data.rules.length > limits.rules)) {
+    throw Error(`配置最多可包含 ${limits.accounts} 个邮箱和 ${limits.rules} 条规则`);
+  }
   const accounts = data.accounts.map(accountInput);
   if (accounts.some(a => !a.id) || new Set(accounts.map(a => a.id)).size !== accounts.length) throw Error('邮箱编号无效或重复');
   const rules = data.rules.map(r => ruleInput(r, accounts));

@@ -53,8 +53,11 @@ class Monitor {
           const sender = msg.envelope?.from?.[0] || {};
           this.onMail({id: `${account.id}:${validity}:${uid}`, accountId: account.id, sender: sender.name || sender.address || '未知发件人', senderEmail: sender.address || '', subject: msg.envelope?.subject || '（无主题）', body, bodySkipped: msg.size > 5 * 1024 * 1024, date: (msg.internalDate || new Date()).toISOString(), receivedAt: new Date().toISOString(), unread: true}, initial);
           last = uid;
-          state.cursors[account.id] = {validity, uid: initial ? baseline : last};
-          this.persist();
+          // Commit the historical baseline only after the whole first pass succeeds.
+          if (!initial) {
+            state.cursors[account.id] = {validity, uid: last};
+            this.persist();
+          }
         }
         if (current()) {
           state.cursors[account.id] = {validity, uid: initial ? baseline : uids.length ? last : Math.max(cursor?.uid || 0, baseline)};

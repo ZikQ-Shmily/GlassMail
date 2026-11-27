@@ -1,9 +1,10 @@
-const {app, BrowserWindow, ipcMain, safeStorage, dialog, Notification, Tray, Menu, nativeImage, protocol} = require('electron');
+const {app, BrowserWindow, ipcMain, safeStorage, dialog, Notification, Tray, Menu, nativeImage, protocol, net, shell} = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const {randomUUID} = require('node:crypto');
 const {Monitor} = require('./monitor.cjs');
 const audio = require('./custom-audio.cjs');
+const {createUpdateService} = require('./updates.cjs');
 protocol.registerSchemesAsPrivileged([
   {scheme: audio.scheme, privileges: {standard: true, secure: true, stream: true}}
 ]);
@@ -47,9 +48,22 @@ function useCustomSound(sound) {
 }
 
 function setupIPC() {
+  const updates = createUpdateService({
+    currentVersion: app.getVersion(),
+    platform: process.platform,
+    arch: process.arch,
+    fetchRelease: (url, options) => net.fetch(url, options),
+    openExternal: url => shell.openExternal(url),
+  });
+  register('checkUpdate', updates.checkUpdate);
+  register('openUpdate', updates.openUpdate);
+  register('openProject', updates.openProject);
   register('state', () => publicState());
   register('saveAccount', input => {
     const account = domain.accountInput(input), old = state.accounts.find(a => a.id === account.id);
+    if (!old && state.accounts.length >= domain.limits.accounts) {
+      throw Error(`最多可添加 ${domain.limits.accounts} 个邮箱`);
+    }
     account.id = old?.id || randomUUID();
     const sameIdentity = old && old.email === account.email && old.host === account.host && old.port === account.port;
     account.secret = input.password ? encrypt(String(input.password).slice(0, 4096)) : sameIdentity ? old.secret : '';
@@ -65,7 +79,22 @@ function setupIPC() {
     const pass = input.password || (same ? password(old) : '');
     if (!pass) throw Error('请先填写授权码'); return monitor.test(account, pass);
   });
-  register('saveRule', input => {const rule = domain.ruleInput(input, state.accounts); rule.id = state.rules.some(r => r.id === rule.id) ? rule.id : randomUUID(); state.rules = [...state.rules.filter(r => r.id !== rule.id), rule]; persist(); publish(); return publicState();});
+  register('saveRule', input => {
+    const rule = domain.ruleInput(input, state.accounts);
+    const index = state.rules.findIndex(existing => existing.id === rule.id);
+    if (index >= 0) {
+      state.rules[index] = rule;
+    } else {
+      if (state.rules.length >= domain.limits.rules) {
+        throw Error(`最多可添加 ${domain.limits.rules} 条规则`);
+      }
+      rule.id = randomUUID();
+      state.rules.push(rule);
+    }
+    persist();
+    publish();
+    return publicState();
+  });
   register('deleteRule', id => {state.rules = state.rules.filter(r => r.id !== id); persist(); publish();});
   register('settings', input => {state.settings = domain.settingsInput({...state.settings, ...input}); persist(); restartTimer(); publish(); return publicState();});
   register('sync', async () => {await monitor.sync(); return publicState();});
@@ -120,7 +149,7 @@ app.whenReady().then(async () => {
   file = path.join(app.getPath('userData'), 'glassmail.json');
   state = {accounts: [], rules: [], messages: [], alerts: [], cursors: {}, settings: domain.defaults};
   if (fs.existsSync(file)) {
-    try { const stored = JSON.parse(fs.readFileSync(file, 'utf8')); const config = domain.importConfig({...stored, format:'glassmail', version:1}); state = {...state, ...stored, ...config, accounts: config.accounts.map(a => ({...a, secret: stored.accounts.find(s => s.id === a.id)?.secret || ''}))}; }
+    try { const stored = JSON.parse(fs.readFileSync(file, 'utf8')); const config = domain.importConfig({...stored, format:'glassmail', version:1}, {enforceLimits: false}); state = {...state, ...stored, ...config, accounts: config.accounts.map(a => ({...a, secret: stored.accounts.find(s => s.id === a.id)?.secret || ''}))}; }
     catch { dialog.showErrorBox('配置读取失败', '原配置文件已保留。请备份后检查 glassmail.json，应用不会覆盖此文件。'); app.quit(); return; }
   }
   const userData = app.getPath('userData');
