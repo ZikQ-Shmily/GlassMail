@@ -2,7 +2,12 @@ let current = null;
 const listeners = new Set();
 const melodies = {glass:[1046.5,1568,2093], chime:[784,987.77,1174.66,1568], pulse:[660,660,880,880], beacon:[880,440,880,440,880]};
 export const soundNames = {glass:'水晶轻响', chime:'风铃', pulse:'脉冲提醒', beacon:'信标警报', custom:'自定义音频'};
-const soundState = () => ({playing:!!current, name:current?.name || null, loop:current?.loop || false});
+const soundState = () => ({
+  playing: !!current,
+  name: current?.name ?? null,
+  loop: current?.loop ?? false,
+  previewKey: current?.previewKey ?? null
+});
 const publish = () => {const state = soundState(); listeners.forEach(callback => callback(state));};
 export function onSoundState(callback) {listeners.add(callback); callback(soundState()); return () => listeners.delete(callback);}
 
@@ -60,10 +65,10 @@ function playMelody(session, volume) {
   });
 }
 
-export async function playSound(name = 'glass', volume = 65, custom = null, {loop = false} = {}) {
+export async function playSound(name = 'glass', volume = 65, custom = null, {loop = false, previewKey = null} = {}) {
   stopSound();
   const customAudio = name === 'custom' && custom;
-  const session = {name:customAudio ? 'custom' : Object.hasOwn(melodies,name) ? name : 'glass', loop:!!loop, nodes:new Set(), timer:null, audio:null, context:null};
+  const session = {name:customAudio ? 'custom' : Object.hasOwn(melodies,name) ? name : 'glass', loop:!!loop, previewKey, nodes:new Set(), timer:null, audio:null, context:null};
   const level = Number.isFinite(Number(volume)) ? Math.max(0,Math.min(100,Number(volume))) / 100 : .65;
   current = session;
   publish();
@@ -91,3 +96,18 @@ export async function playSound(name = 'glass', volume = 65, custom = null, {loo
   }
 }
 export function stopSound() {if (current) finish(current);}
+
+export async function togglePreview(name, volume, custom, {loop, previewKey}) {
+  if (current && current.previewKey === previewKey && current.name === name) {
+    stopSound();
+    return;
+  }
+  if (name === 'custom' && !custom) throw Error('请先导入自定义音频');
+  await playSound(name, volume, custom, {loop, previewKey});
+}
+
+export function stopPreview(previewKey) {
+  if (current?.previewKey != null && (previewKey === undefined || current.previewKey === previewKey)) {
+    stopSound();
+  }
+}
