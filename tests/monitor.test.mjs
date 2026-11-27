@@ -41,3 +41,16 @@ test('建立首次基线期间到达的新邮件在下一轮报警，不混入�
  await s.monitor.sync();assert.equal(s.received.length,4);assert.equal(s.state.cursors.a.uid,4);
  await s.monitor.sync();assert.equal(s.received.length,5);assert.equal(s.received.at(-1).historical,false);assert.equal(s.state.cursors.a.uid,5);
 });
+
+test('首次同步中途失败后重试，仍会补齐历史邮件且不会触发报警', async () => {
+  const s = setup({count:4, failUid:2});
+  await s.monitor.sync();
+  assert.equal(s.state.cursors.a, undefined);
+  assert.equal(s.received.length, 1);
+
+  s.box.failUid = null;
+  await s.monitor.sync();
+  assert.equal(s.state.cursors.a.uid, 4);
+  assert.equal(new Set(s.received.map(({mail}) => mail.id)).size, 4);
+  assert.ok(s.received.every(({historical}) => historical));
+});
